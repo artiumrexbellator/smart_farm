@@ -71,61 +71,11 @@ docker-compose up --detach
 docker-compose down
 ```
 
-## Shared JupyterLab Notebooks Folder ##
-
-The folder `./local/notebooks` in the Git repo is mapped to a filesytem mount `/opt/workspace/notebooks` in the JupyterLab host running in Docker.  This allows notebooks to be easily passed in and out of the Docker environment, and they can be stored and updated independently of the images.  
-
-This folder is included in the `.gitignore` file so updates to the notebooks and new notebooks are not tracked.  
-
-
-## Data Folders ##
-
-Three shared cluster-wide folders are created on top of `/opt/workspace` during the Docker build:
-+ `/opt/workspace/events` - Spark history events  
-+ `/opt/workspace/datain` - source data for loading in to Spark jobs  
-+ `/opt/workspace/dataout`- output data from Spark jobs  
-
-The data in these folders is persistent between container restarts and between Docker image rebuilds as it is located on the Docker `shared-workspace` volume.
-
-## Compute and Memory Resources ##
-
-Re-size the `SPARK_WORKER_CORES` and `SPARK_WORKER_MEMORY` to size the cluster so that it can run in the local environment.  
-
-*Check the amount of host resources allocated to Docker in the Docker Desktop configuration*.  8 GB of memory is recommended, 4 GB is the minimum.
-
-![Docker Desktop Windows settings](./images/DockerDesktopMemory.png)  
-
-
-## Spark-Master Logs and Interactive Shell ##
-##### Connect to Spark Master with Interactive Shell #####
-
-Start a shell inside the docker container and use Linux commands such as `ps`, `netstat`, `vi` / `vim` etc
-```
-docker exec -it <container_hash_id> bash
-```
-(If running in git-bash on Windows, precede the docker command with `winpty` to enable an interactive terminal)  
-
-Connect to the worker nodes in a similar fashion.
-##### View Docker Container Logs #####  
-Logs can be viewed from the Docker host environment (without connecting into a container):
-```
-docker logs <container_hash_id>
-```  
-View the Docker Compose Logs as follows:
-```
-docker-compose logs
-```
-For **Spark Jobs that Hang Forever** waiting to start, check the `docker-compose` logs for "*check your cluster UI to ensure that workers are registered and have sufficient resources*" messages.  This means that not enough resources (memory or CPU) were available to run the job.  Kill the job and configure with enough resources.
-
 ### Monitoring the Spark Cluster and Killing Application Jobs ###
 
 View the overall state of the cluster via the *Spark Master Web UI* at `http://localhost:8080/`   
 
-This also lists the URL for the *Spark Master Service*: `spark://spark-master:7077`   
-
-Because the cluster is running in Standalone Mode (*Not* Yarn), it is not possible to use the usual `yarn application -kill` command.  Instead, use the Spark Master web UI to list running jobs and kill them by selecting the "kill" link in the Running Applications view.
-![Cluster](./images/master-jobs.png)      
-
+This also lists the URL for the *Spark Master Service*: `spark://spark-master:7077`       
 ### Spark History Server ###
 
 Access the history server to view complete and incomplete applications on a per node basis.  
@@ -142,59 +92,6 @@ To clear down the history of jobs, just connect to the spark master or worker no
 
 Use a web-browser to connect to `http://localhost:8889`   
 
-The Jupyter notebooks are stored in the shared workspace `/opt/workspace/notebooks` which is mapped to a local directory on the Docker host.  The volume configuration and mapping to a local file-system mount is specified in the `docker-compose.yml` file and executed at run-time:
-```
-...
-services:
-  jupyterlab:
-    image: jupyterlab
-    container_name: jupyterlab
-    ports:
-      - 8889:8888
-    volumes:
-      - shared-workspace:/opt/workspace
-      - ./local/notebooks:/opt/workspace/notebooks
-...      
-```
-
-#### Download Sample Data ####
-
-Sample data for the notebooks can be downloaded by running the `data_download.ipynb` notebook.
-
-
-#### Start a PySpark Session ####
-```
-from pyspark.sql import SparkSession
-
-spark = SparkSession.\
-        builder.\
-        appName("pyspark-notebook-1").\
-        master("spark://spark-master:7077").\
-        config("spark.executor.memory", "512m").\
-        getOrCreate()
-```
-
-#### End a PySpark Session ####
-**Note**: To make sure the memory resources of a Jupyter Notebook session are freed up, always stop the Spark session when finished in the notebook, as follows:
-```
-spark.stop()
-```
-
-# Submit PySpark Jobs to the Spark Master #
-
-Jobs can be submitted to run against the cluster by running `spark-submit` from the jupyterlab container, which is installed in `/usr/local/bin` as part of the PySpark install in the Docker build for this image.
-
-A wrapper script in `/opt/workspace/notebooks/jobs` called `spark-submit.sh` can be used to call the main `spark-submit` utility and get it to execute a PySpark Python script in the Spark cluster - EG:
-```
-# Start a shell-session in the JupyterLab container
-docker exec -it jupyterlab bash
-
-# CD to PySpark jobs folder
-cd notebooks/jobs
-
-# spark-submit the pi.py script
-./spark-submit.sh pi.y
-```
 
 View the progress and output from the Spark Master console UI:   
 http://localhost:8080/  
